@@ -2,7 +2,7 @@ import streamlit as st
 import re
 import nltk
 import pandas as pd
-import os
+import time
 
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -45,17 +45,15 @@ def limpiar_texto(texto):
 # -------------------------
 @st.cache_data
 def cargar_datos():
-    # IMPORTANTE: reemplaza con tu ruta local si no usas KaggleHub
     df = pd.read_csv("cyberbullying_tweets.csv")
     return df
 
 df = cargar_datos()
 
 # -------------------------
-# ENTRENAMIENTO
+# ENTRENAMIENTO DINÁMICO
 # -------------------------
-@st.cache_resource
-def entrenar_modelo(df):
+def entrenar_modelo_dinamico(df):
     df["clean_text"] = df["tweet_text"].apply(limpiar_texto)
 
     X = df["clean_text"]
@@ -66,18 +64,38 @@ def entrenar_modelo(df):
     )
 
     vectorizer = TfidfVectorizer(max_features=5000)
-
     X_train_vec = vectorizer.fit_transform(X_train)
     X_test_vec = vectorizer.transform(X_test)
 
-    modelo = LogisticRegression(max_iter=1000)
-    modelo.fit(X_train_vec, y_train)
+    # Modelo con warm_start
+    modelo = LogisticRegression(max_iter=1, warm_start=True)
 
-    accuracy = modelo.score(X_test_vec, y_test)
+    # UI dinámica
+    progress_bar = st.progress(0)
+    accuracy_placeholder = st.empty()
 
-    return modelo, vectorizer, accuracy
+    epochs = 20
+    acc_list = []
 
-modelo, vectorizer, accuracy = entrenar_modelo(df)
+    for i in range(epochs):
+        modelo.fit(X_train_vec, y_train)
+
+        acc = modelo.score(X_test_vec, y_test)
+        acc_list.append(acc)
+
+        progress_bar.progress((i + 1) / epochs)
+        accuracy_placeholder.metric("Accuracy en entrenamiento", f"{acc:.2%}")
+
+        time.sleep(0.2)  # solo para visual
+
+    return modelo, vectorizer, acc_list[-1]
+
+# Botón para entrenar
+if st.button("🚀 Entrenar modelo"):
+    modelo, vectorizer, accuracy = entrenar_modelo_dinamico(df)
+    st.session_state["modelo"] = modelo
+    st.session_state["vectorizer"] = vectorizer
+    st.session_state["accuracy"] = accuracy
 
 # -------------------------
 # INTERFAZ
@@ -87,10 +105,12 @@ st.subheader("✍️ Ingresa un texto")
 texto_usuario = st.text_area("Escribe aquí:", height=150)
 
 if st.button("Predecir"):
-    if texto_usuario.strip() != "":
+    if "modelo" not in st.session_state:
+        st.warning("Primero entrena el modelo 👆")
+    elif texto_usuario.strip() != "":
         limpio = limpiar_texto(texto_usuario)
-        vector = vectorizer.transform([limpio])
-        pred = modelo.predict(vector)[0]
+        vector = st.session_state["vectorizer"].transform([limpio])
+        pred = st.session_state["modelo"].predict(vector)[0]
 
         st.success(f"Predicción: **{pred}**")
 
@@ -104,7 +124,11 @@ if st.button("Predecir"):
 # MÉTRICAS
 # -------------------------
 st.subheader("📊 Desempeño del modelo")
-st.metric(label="Accuracy", value=f"{accuracy:.2%}")
+
+if "accuracy" in st.session_state:
+    st.metric(label="Accuracy final", value=f"{st.session_state['accuracy']:.2%}")
+else:
+    st.info("Entrena el modelo para ver métricas.")
 
 # -------------------------
 # DISTRIBUCIÓN DE CLASES
@@ -121,5 +145,6 @@ with st.expander("ℹ️ Cómo funciona"):
     st.write("""
     1. Limpieza del texto (NLP)
     2. Vectorización con TF-IDF
-    3. Clasificación con Regresión Logística
+    3. Entrenamiento iterativo (visualización en vivo)
+    4. Clasificación con Regresión Logística
     """)
