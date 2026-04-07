@@ -57,9 +57,37 @@ def load_data():
 
 df = load_data()
 
-# 🔥 Crear etiqueta binaria (clave para que funcione bien)
+# -------------------------
+# 🔥 AÑADIR EJEMPLOS NO-BULLYING (CLAVE)
+# -------------------------
+extra_data = pd.DataFrame({
+    "tweet_text": [
+        "I love spending time with my family",
+        "You are doing great, keep going",
+        "This is a beautiful day",
+        "I enjoy learning new things",
+        "You are very talented",
+        "Let's work together as a team",
+        "I appreciate your help",
+        "Everything will be okay",
+        "You did a fantastic job",
+        "I am proud of you",
+        "We should collaborate on this project",
+        "I like your idea",
+        "This looks really good",
+        "Happy birthday! Have a great day",
+        "Thank you for your support"
+    ],
+    "cyberbullying_type": ["not_cyberbullying"] * 15
+})
+
+df = pd.concat([df, extra_data], ignore_index=True)
+
+# -------------------------
+# 🔥 ETIQUETA BINARIA MEJORADA
+# -------------------------
 df["is_bullying"] = df["cyberbullying_type"].apply(
-    lambda x: 0 if x == "not_cyberbullying" else 1
+    lambda x: 0 if "not" in str(x).lower() else 1
 )
 
 # -------------------------
@@ -72,7 +100,7 @@ def train_models(df):
 
     X = df["clean_text"]
 
-    # Modelo 1: bullying vs no bullying
+    # 🔥 Modelo 1: bullying vs no bullying
     y_binary = df["is_bullying"]
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -83,14 +111,14 @@ def train_models(df):
 
     X_train_vec = vectorizer.fit_transform(X_train)
 
-    model_binary = LogisticRegression(max_iter=1000)
+    model_binary = LogisticRegression(max_iter=1000, class_weight="balanced")
     model_binary.fit(X_train_vec, y_train)
 
     acc_binary = model_binary.score(
         vectorizer.transform(X_test), y_test
     )
 
-    # Modelo 2: tipo de bullying (solo datos de bullying)
+    # 🔥 Modelo 2: tipo de bullying
     df_bully = df[df["is_bullying"] == 1]
 
     X2 = df_bully["clean_text"]
@@ -125,7 +153,6 @@ if st.button("Analizar"):
         cleaned = clean_text(user_input)
         vector = vectorizer.transform([cleaned])
 
-        # 🔥 Paso 1: detectar bullying
         pred_binary = model_binary.predict(vector)[0]
 
         if pred_binary == 0:
@@ -133,7 +160,6 @@ if st.button("Analizar"):
         else:
             st.error("🚨 Es cyberbullying")
 
-            # 🔥 Paso 2: tipo
             pred_type = model_type.predict(vector)[0]
 
             label_map = {
@@ -146,7 +172,6 @@ if st.button("Analizar"):
 
             st.warning(f"Tipo: **{label_map.get(pred_type, pred_type)}**")
 
-        # 🔍 Mostrar proceso
         with st.expander("🔍 Ver proceso"):
             st.write("Texto limpio:", cleaned)
 
@@ -159,24 +184,3 @@ if st.button("Analizar"):
 st.subheader("📊 Desempeño del modelo")
 st.metric("Detección bullying", f"{acc_binary:.2%}")
 st.metric("Clasificación tipo", f"{acc_type:.2%}")
-
-# -------------------------
-# 🔥 AÑADIR EJEMPLOS NO-BULLYING (CLAVE)
-# -------------------------
-extra_data = pd.DataFrame({
-    "tweet_text": [
-        "I love spending time with my family",
-        "You are doing great, keep going",
-        "This is a beautiful day",
-        "I enjoy learning new things",
-        "You are very talented",
-        "Let's work together as a team",
-        "I appreciate your help",
-        "Everything will be okay",
-        "You did a fantastic job",
-        "I am proud of you"
-    ],
-    "cyberbullying_type": ["not_cyberbullying"] * 10
-})
-
-df = pd.concat([df, extra_data], ignore_index=True)
