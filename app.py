@@ -1,7 +1,9 @@
+
 import streamlit as st
 import re
 import nltk
 import pandas as pd
+import os
 
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -10,6 +12,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
+# Descargar recursos
 nltk.download('stopwords')
 nltk.download('wordnet')
 
@@ -19,6 +22,7 @@ nltk.download('wordnet')
 st.set_page_config(page_title="Cyberbullying Detector", layout="centered")
 
 st.title("🚨 Detector de Cyberbullying")
+st.write("Clasifica texto en diferentes tipos de cyberbullying usando NLP.")
 
 # -------------------------
 # PREPROCESAMIENTO
@@ -38,11 +42,13 @@ def limpiar_texto(texto):
     return " ".join(palabras)
 
 # -------------------------
-# DATOS
+# CARGA DE DATOS
 # -------------------------
 @st.cache_data
 def cargar_datos():
-    return pd.read_csv("cyberbullying_tweets.csv")
+    # IMPORTANTE: reemplaza con tu ruta local si no usas KaggleHub
+    df = pd.read_csv("cyberbullying_tweets.csv")
+    return df
 
 df = cargar_datos()
 
@@ -61,6 +67,7 @@ def entrenar_modelo(df):
     )
 
     vectorizer = TfidfVectorizer(max_features=5000)
+
     X_train_vec = vectorizer.fit_transform(X_train)
     X_test_vec = vectorizer.transform(X_test)
 
@@ -71,58 +78,43 @@ def entrenar_modelo(df):
 
     return modelo, vectorizer, accuracy
 
-modelo, vectorizer, base_accuracy = entrenar_modelo(df)
+modelo, vectorizer, accuracy = entrenar_modelo(df)
 
 # -------------------------
-# SESSION STATE
+# INTERFAZ
 # -------------------------
-if "total" not in st.session_state:
-    st.session_state.total = 0
-    st.session_state.correct = 0
-    st.session_state.last_pred = None
+st.subheader("✍️ Ingresa un texto")
 
-# -------------------------
-# INPUT
-# -------------------------
-texto_usuario = st.text_area("Escribe texto:")
+texto_usuario = st.text_area("Escribe aquí:", height=150)
 
 if st.button("Predecir"):
-    if texto_usuario.strip():
+    if texto_usuario.strip() != "":
         limpio = limpiar_texto(texto_usuario)
         vector = vectorizer.transform([limpio])
         pred = modelo.predict(vector)[0]
 
-        st.session_state.last_pred = pred
+        st.success(f"Predicción: **{pred}**")
 
-        st.success(f"Predicción: {pred}")
-
-# -------------------------
-# FEEDBACK DEL USUARIO
-# -------------------------
-if st.session_state.last_pred is not None:
-    st.write("¿Fue correcta la predicción?")
-
-    col1, col2 = st.columns(2)
-
-    if col1.button("✅ Correcta"):
-        st.session_state.total += 1
-        st.session_state.correct += 1
-
-    if col2.button("❌ Incorrecta"):
-        st.session_state.total += 1
+        with st.expander("🔍 Ver proceso"):
+            st.write("**Texto original:**", texto_usuario)
+            st.write("**Texto limpio:**", limpio)
+    else:
+        st.warning("Por favor ingresa un texto.")
 
 # -------------------------
-# ACCURACY DINÁMICO
+# DISTRIBUCIÓN DE CLASES
 # -------------------------
-st.subheader("📊 Accuracy dinámico")
+st.subheader("📌 Distribución de clases")
 
-if st.session_state.total > 0:
-    dynamic_acc = st.session_state.correct / st.session_state.total
-    st.metric("Accuracy en uso", f"{dynamic_acc:.2%}")
-else:
-    st.metric("Accuracy inicial (test)", f"{base_accuracy:.2%}")
+conteo = df["cyberbullying_type"].value_counts()
+st.bar_chart(conteo)
 
 # -------------------------
-# CLASES
+# INFO
 # -------------------------
-st.bar_chart(df["cyberbullying_type"].value_counts())
+with st.expander("ℹ️ Cómo funciona"):
+    st.write("""
+    1. Limpieza del texto (NLP)
+    2. Vectorización con TF-IDF
+    3. Clasificación con Regresión Logística
+    """)
