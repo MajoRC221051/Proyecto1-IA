@@ -49,7 +49,7 @@ def clean_text(text):
     return " ".join(words)
 
 # -------------------------
-# 🔥 REGLAS ANTI-FALLO
+# REGLAS ANTI-FALLO
 # -------------------------
 bullying_keywords = [
     "stupid", "idiot", "dumb", "useless", "loser",
@@ -74,7 +74,7 @@ def load_data():
 df = load_data()
 
 # -------------------------
-# 🔥 AÑADIR EJEMPLOS NO-BULLYING
+# DATA AUGMENTATION
 # -------------------------
 extra_data = pd.DataFrame({
     "tweet_text": [
@@ -163,13 +163,14 @@ if st.button("Analizar"):
 
         # 🔥 combinación modelo + reglas
         rule_pred = rule_based_detection(user_input)
-        model_pred = model_binary.predict(vector)[0]
-
-        pred_binary = 1 if (rule_pred == 1 or model_pred == 1) else 0
-
-        # 🔥 Mostrar probabilidad (esto SÍ cambia)
         probs = model_binary.predict_proba(vector)[0]
 
+        # probabilidad bullying
+        prob_no, prob_yes = probs
+
+        pred_binary = 1 if (rule_pred == 1 or prob_yes > 0.5) else 0
+
+        # 📊 GRÁFICA DINÁMICA
         prob_df = pd.DataFrame({
             "Clase": ["No Bullying", "Bullying"],
             "Probabilidad": probs
@@ -178,7 +179,10 @@ if st.button("Analizar"):
         st.subheader("📊 Probabilidad de predicción")
         st.bar_chart(prob_df.set_index("Clase"))
 
-        # 🔥 RESULTADO
+        # 🔥 MÉTRICA DINÁMICA
+        st.metric("Riesgo de bullying", f"{prob_yes*100:.2f}%")
+
+        # RESULTADO
         if pred_binary == 0:
             st.success("✅ No es cyberbullying")
         else:
@@ -196,7 +200,6 @@ if st.button("Analizar"):
 
             st.warning(f"Tipo: **{label_map.get(pred_type, pred_type)}**")
 
-        # 🔍 proceso
         with st.expander("🔍 Ver proceso"):
             st.write("Texto limpio:", cleaned)
 
@@ -204,7 +207,7 @@ if st.button("Analizar"):
         st.warning("Ingresa un texto.")
 
 # -------------------------
-# METRICS
+# MÉTRICAS DEL MODELO (FIJAS)
 # -------------------------
 st.subheader("📊 Desempeño del modelo")
 st.metric("Detección bullying", f"{acc_binary:.2%}")
