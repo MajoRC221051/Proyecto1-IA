@@ -24,6 +24,14 @@ except:
     nltk.download('wordnet')
 
 # -------------------------
+# CONFIG
+# -------------------------
+st.set_page_config(page_title="Cyberbullying Detector", layout="centered")
+
+st.title("🚨 Detector de Ciberacoso")
+st.write("Clasifica si un texto contiene ciberacoso usando NLP.")
+
+# -------------------------
 # LIMPIEZA
 # -------------------------
 stop_words = set(stopwords.words('english'))
@@ -49,22 +57,23 @@ def cargar_datos():
 
 df = cargar_datos()
 
-# 🔥 agregar ejemplos positivos (importante)
+# 🔥 balanceo básico
 extra = pd.DataFrame({
     "tweet_text": [
+        "I love you",
         "I love my family",
         "You are amazing",
         "This is a great day",
         "I enjoy learning",
         "You did a great job"
     ],
-    "cyberbullying_type": ["not_cyberbullying"] * 5
+    "cyberbullying_type": ["not_cyberbullying"] * 6
 })
 
 df = pd.concat([df, extra], ignore_index=True)
 
 # -------------------------
-# ENTRENAR MODELO
+# ENTRENAMIENTO
 # -------------------------
 @st.cache_resource
 def entrenar(df):
@@ -74,18 +83,24 @@ def entrenar(df):
     X = df["clean"]
     y = df["cyberbullying_type"]
 
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
     vectorizer = TfidfVectorizer(max_features=5000)
-    X_vec = vectorizer.fit_transform(X)
+    X_train_vec = vectorizer.fit_transform(X_train)
 
     model = LogisticRegression(max_iter=1000)
-    model.fit(X_vec, y)
+    model.fit(X_train_vec, y_train)
 
-    return model, vectorizer
+    accuracy = model.score(vectorizer.transform(X_test), y_test)
 
-lr_final, tfidf_vectorizer = entrenar(df)
+    return model, vectorizer, accuracy
+
+lr_final, tfidf_vectorizer, accuracy = entrenar(df)
 
 # -------------------------
-# FUNCIÓN DE PREDICCIÓN
+# PREDICCIÓN
 # -------------------------
 def predecir(texto):
     texto_limpio = limpiar_texto(texto)
@@ -94,34 +109,35 @@ def predecir(texto):
     pred = lr_final.predict(vector)[0]
     probs = lr_final.predict_proba(vector)[0]
 
-    # confianza = probabilidad de la clase predicha
     clases = lr_final.classes_
     idx = list(clases).index(pred)
     confianza = probs[idx]
 
     return pred, confianza
 
-# ===============================
+# -------------------------
 # INTERFAZ
-# ===============================
+# -------------------------
+texto = st.text_area("✍️ Escribe un tweet:")
 
-st.title("🚨 Detector de Ciberacoso")
-st.write("Ingresa un tweet y el modelo predecirá si contiene ciberacoso.")
-
-texto = st.text_area("Escribe aquí el tweet:")
-
-if st.button("Predecir"):
+if st.button("Analizar"):
 
     if texto.strip() == "":
         st.warning("Por favor ingresa un texto")
-
     else:
-        resultado = predecir(texto)
+        resultado, confianza = predecir(texto)
 
-        st.success(f"Predicción: {resultado}")
-
-        # Mensaje más claro
+        # 🔥 RESULTADO CLARO
         if resultado == "not_cyberbullying":
-            st.success("✅ Contenido no ofensivo")
+            st.success("✅ No es ciberacoso")
         else:
-            st.error("🚨 Contenido potencialmente ofensivo")
+            st.error("🚨 Contenido ofensivo detectado")
+
+        # 🔥 MÉTRICA DINÁMICA
+        st.metric("Confianza del modelo", f"{confianza*100:.2f}%")
+
+# -------------------------
+# MÉTRICA GLOBAL
+# -------------------------
+st.subheader("📊 Desempeño del modelo")
+st.metric("Accuracy", f"{accuracy:.2%}")
