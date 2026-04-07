@@ -166,17 +166,19 @@ if st.button("Analizar"):
         model_pred = model_binary.predict(vector)[0]
 
         pred_binary = 1 if (rule_pred == 1 or model_pred == 1) else 0
+
         # 🔥 Mostrar probabilidad (esto SÍ cambia)
         probs = model_binary.predict_proba(vector)[0]
 
         prob_df = pd.DataFrame({
-        "Clase": ["No Bullying", "Bullying"],
-        "Probabilidad": probs
+            "Clase": ["No Bullying", "Bullying"],
+            "Probabilidad": probs
         })
 
-st.subheader("📊 Probabilidad de predicción")
-st.bar_chart(prob_df.set_index("Clase"))
+        st.subheader("📊 Probabilidad de predicción")
+        st.bar_chart(prob_df.set_index("Clase"))
 
+        # 🔥 RESULTADO
         if pred_binary == 0:
             st.success("✅ No es cyberbullying")
         else:
@@ -194,6 +196,7 @@ st.bar_chart(prob_df.set_index("Clase"))
 
             st.warning(f"Tipo: **{label_map.get(pred_type, pred_type)}**")
 
+        # 🔍 proceso
         with st.expander("🔍 Ver proceso"):
             st.write("Texto limpio:", cleaned)
 
