@@ -2,7 +2,6 @@ import streamlit as st
 import re
 import nltk
 import pandas as pd
-import os
 
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -11,17 +10,26 @@ from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
-# Descargar recursos
-nltk.download('stopwords')
-nltk.download('wordnet')
+# -------------------------
+# NLTK setup (robusto)
+# -------------------------
+try:
+    nltk.data.find('corpora/stopwords')
+except:
+    nltk.download('stopwords')
+
+try:
+    nltk.data.find('corpora/wordnet')
+except:
+    nltk.download('wordnet')
 
 # -------------------------
 # CONFIG
 # -------------------------
 st.set_page_config(page_title="Cyberbullying Detector", layout="centered")
 
-st.title("🚨 Detector de Cyberbullying")
-st.write("Clasifica texto en diferentes tipos de cyberbullying usando NLP.")
+st.title("🚨 Cyberbullying Detector (Demo Profesional)")
+st.write("Detecta si un texto contiene cyberbullying y su tipo.")
 
 # -------------------------
 # PREPROCESAMIENTO
@@ -29,97 +37,125 @@ st.write("Clasifica texto en diferentes tipos de cyberbullying usando NLP.")
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
-def limpiar_texto(texto):
-    texto = texto.lower()
-    texto = re.sub(r"http\S+", "", texto)
-    texto = re.sub(r"[^a-zA-Z\s]", "", texto)
+def clean_text(text):
+    text = text.lower()
+    text = re.sub(r"http\S+", "", text)
+    text = re.sub(r"[^a-zA-Z\s]", "", text)
 
-    palabras = texto.split()
-    palabras = [w for w in palabras if w not in stop_words]
-    palabras = [lemmatizer.lemmatize(w) for w in palabras]
+    words = text.split()
+    words = [w for w in words if w not in stop_words]
+    words = [lemmatizer.lemmatize(w) for w in words]
 
-    return " ".join(palabras)
+    return " ".join(words)
 
 # -------------------------
-# CARGA DE DATOS
+# LOAD DATA
 # -------------------------
 @st.cache_data
-def cargar_datos():
-    # IMPORTANTE: reemplaza con tu ruta local si no usas KaggleHub
-    df = pd.read_csv("cyberbullying_tweets.csv")
-    return df
+def load_data():
+    return pd.read_csv("cyberbullying_tweets.csv")
 
-df = cargar_datos()
+df = load_data()
+
+# 🔥 Crear etiqueta binaria (clave para que funcione bien)
+df["is_bullying"] = df["cyberbullying_type"].apply(
+    lambda x: 0 if x == "not_cyberbullying" else 1
+)
 
 # -------------------------
-# ENTRENAMIENTO
+# TRAIN MODELS
 # -------------------------
 @st.cache_resource
-def entrenar_modelo(df):
-    df["clean_text"] = df["tweet_text"].apply(limpiar_texto)
+def train_models(df):
+
+    df["clean_text"] = df["tweet_text"].apply(clean_text)
 
     X = df["clean_text"]
-    y = df["cyberbullying_type"]
+
+    # Modelo 1: bullying vs no bullying
+    y_binary = df["is_bullying"]
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
+        X, y_binary, test_size=0.2, random_state=42
     )
 
     vectorizer = TfidfVectorizer(max_features=5000)
 
     X_train_vec = vectorizer.fit_transform(X_train)
-    X_test_vec = vectorizer.transform(X_test)
 
-    modelo = LogisticRegression(max_iter=1000)
-    modelo.fit(X_train_vec, y_train)
+    model_binary = LogisticRegression(max_iter=1000)
+    model_binary.fit(X_train_vec, y_train)
 
-    accuracy = modelo.score(X_test_vec, y_test)
+    acc_binary = model_binary.score(
+        vectorizer.transform(X_test), y_test
+    )
 
-    return modelo, vectorizer, accuracy
+    # Modelo 2: tipo de bullying (solo datos de bullying)
+    df_bully = df[df["is_bullying"] == 1]
 
-modelo, vectorizer, accuracy = entrenar_modelo(df)
+    X2 = df_bully["clean_text"]
+    y2 = df_bully["cyberbullying_type"]
+
+    X2_train, X2_test, y2_train, y2_test = train_test_split(
+        X2, y2, test_size=0.2, random_state=42
+    )
+
+    model_type = LogisticRegression(max_iter=1000)
+    model_type.fit(vectorizer.transform(X2_train), y2_train)
+
+    acc_type = model_type.score(
+        vectorizer.transform(X2_test), y2_test
+    )
+
+    return model_binary, model_type, vectorizer, acc_binary, acc_type
+
+model_binary, model_type, vectorizer, acc_binary, acc_type = train_models(df)
 
 # -------------------------
-# INTERFAZ
+# UI
 # -------------------------
 st.subheader("✍️ Ingresa un texto")
 
-texto_usuario = st.text_area("Escribe aquí:", height=150)
+user_input = st.text_area("Escribe aquí:", height=150)
 
-if st.button("Predecir"):
-    if texto_usuario.strip() != "":
-        limpio = limpiar_texto(texto_usuario)
-        vector = vectorizer.transform([limpio])
-        pred = modelo.predict(vector)[0]
+if st.button("Analizar"):
 
-        st.success(f"Predicción: **{pred}**")
+    if user_input.strip() != "":
 
+        cleaned = clean_text(user_input)
+        vector = vectorizer.transform([cleaned])
+
+        # 🔥 Paso 1: detectar bullying
+        pred_binary = model_binary.predict(vector)[0]
+
+        if pred_binary == 0:
+            st.success("✅ No es cyberbullying")
+        else:
+            st.error("🚨 Es cyberbullying")
+
+            # 🔥 Paso 2: tipo
+            pred_type = model_type.predict(vector)[0]
+
+            label_map = {
+                "age": "Bullying por edad",
+                "ethnicity": "Bullying por etnia",
+                "religion": "Bullying por religión",
+                "gender": "Bullying por género",
+                "other_cyberbullying": "Otro tipo de bullying"
+            }
+
+            st.warning(f"Tipo: **{label_map.get(pred_type, pred_type)}**")
+
+        # 🔍 Mostrar proceso
         with st.expander("🔍 Ver proceso"):
-            st.write("**Texto original:**", texto_usuario)
-            st.write("**Texto limpio:**", limpio)
+            st.write("Texto limpio:", cleaned)
+
     else:
-        st.warning("Por favor ingresa un texto.")
+        st.warning("Ingresa un texto.")
 
 # -------------------------
-# MÉTRICAS
+# METRICS
 # -------------------------
 st.subheader("📊 Desempeño del modelo")
-st.metric(label="Accuracy", value=f"{accuracy:.2%}")
-
-# -------------------------
-# DISTRIBUCIÓN DE CLASES
-# -------------------------
-st.subheader("📌 Distribución de clases")
-
-conteo = df["cyberbullying_type"].value_counts()
-st.bar_chart(conteo)
-
-# -------------------------
-# INFO
-# -------------------------
-with st.expander("ℹ️ Cómo funciona"):
-    st.write("""
-    1. Limpieza del texto (NLP)
-    2. Vectorización con TF-IDF
-    3. Clasificación con Regresión Logística
-    """)
+st.metric("Detección bullying", f"{acc_binary:.2%}")
+st.metric("Clasificación tipo", f"{acc_type:.2%}")
