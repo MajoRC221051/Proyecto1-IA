@@ -159,3 +159,24 @@ if st.button("Analizar"):
 st.subheader("📊 Desempeño del modelo")
 st.metric("Detección bullying", f"{acc_binary:.2%}")
 st.metric("Clasificación tipo", f"{acc_type:.2%}")
+
+# -------------------------
+# 🔥 AÑADIR EJEMPLOS NO-BULLYING (CLAVE)
+# -------------------------
+extra_data = pd.DataFrame({
+    "tweet_text": [
+        "I love spending time with my family",
+        "You are doing great, keep going",
+        "This is a beautiful day",
+        "I enjoy learning new things",
+        "You are very talented",
+        "Let's work together as a team",
+        "I appreciate your help",
+        "Everything will be okay",
+        "You did a fantastic job",
+        "I am proud of you"
+    ],
+    "cyberbullying_type": ["not_cyberbullying"] * 10
+})
+
+df = pd.concat([df, extra_data], ignore_index=True)
