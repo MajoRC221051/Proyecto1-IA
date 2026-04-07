@@ -90,7 +90,16 @@ lr_final, tfidf_vectorizer = entrenar(df)
 def predecir(texto):
     texto_limpio = limpiar_texto(texto)
     vector = tfidf_vectorizer.transform([texto_limpio])
-    return lr_final.predict(vector)[0]
+
+    pred = lr_final.predict(vector)[0]
+    probs = lr_final.predict_proba(vector)[0]
+
+    # confianza = probabilidad de la clase predicha
+    clases = lr_final.classes_
+    idx = list(clases).index(pred)
+    confianza = probs[idx]
+
+    return pred, confianza
 
 # ===============================
 # INTERFAZ
