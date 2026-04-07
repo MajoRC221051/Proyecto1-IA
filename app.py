@@ -28,7 +28,7 @@ except:
 # -------------------------
 st.set_page_config(page_title="Cyberbullying Detector", layout="centered")
 
-st.title("🚨 Cyberbullying Detector (Demo Profesional)")
+st.title("🚨 Cyberbullying Detector")
 st.write("Detecta si un texto contiene cyberbullying y su tipo.")
 
 # -------------------------
@@ -122,10 +122,6 @@ def train_models(df):
     model_binary = LogisticRegression(max_iter=1000, class_weight="balanced")
     model_binary.fit(X_train_vec, y_train)
 
-    acc_binary = model_binary.score(
-        vectorizer.transform(X_test), y_test
-    )
-
     # Modelo tipo
     df_bully = df[df["is_bullying"] == 1]
 
@@ -139,13 +135,9 @@ def train_models(df):
     model_type = LogisticRegression(max_iter=1000)
     model_type.fit(vectorizer.transform(X2_train), y2_train)
 
-    acc_type = model_type.score(
-        vectorizer.transform(X2_test), y2_test
-    )
+    return model_binary, model_type, vectorizer
 
-    return model_binary, model_type, vectorizer, acc_binary, acc_type
-
-model_binary, model_type, vectorizer, acc_binary, acc_type = train_models(df)
+model_binary, model_type, vectorizer = train_models(df)
 
 # -------------------------
 # UI
@@ -165,12 +157,11 @@ if st.button("Analizar"):
         rule_pred = rule_based_detection(user_input)
         probs = model_binary.predict_proba(vector)[0]
 
-        # probabilidad bullying
         prob_no, prob_yes = probs
 
         pred_binary = 1 if (rule_pred == 1 or prob_yes > 0.5) else 0
 
-        # 📊 GRÁFICA DINÁMICA
+        # 📊 GRÁFICA
         prob_df = pd.DataFrame({
             "Clase": ["No Bullying", "Bullying"],
             "Probabilidad": probs
@@ -179,8 +170,9 @@ if st.button("Analizar"):
         st.subheader("📊 Probabilidad de predicción")
         st.bar_chart(prob_df.set_index("Clase"))
 
-        # 🔥 MÉTRICA DINÁMICA
+        # 🔥 MÉTRICAS DINÁMICAS
         st.metric("Riesgo de bullying", f"{prob_yes*100:.2f}%")
+        st.metric("Confianza del modelo", f"{max(probs)*100:.2f}%")
 
         # RESULTADO
         if pred_binary == 0:
@@ -205,10 +197,3 @@ if st.button("Analizar"):
 
     else:
         st.warning("Ingresa un texto.")
-
-# -------------------------
-# MÉTRICAS DEL MODELO (FIJAS)
-# -------------------------
-st.subheader("📊 Desempeño del modelo")
-st.metric("Detección bullying", f"{acc_binary:.2%}")
-st.metric("Clasificación tipo", f"{acc_type:.2%}")
