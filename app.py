@@ -11,7 +11,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
 # -------------------------
-# NLTK setup (robusto)
+# NLTK setup
 # -------------------------
 try:
     nltk.data.find('corpora/stopwords')
@@ -49,6 +49,22 @@ def clean_text(text):
     return " ".join(words)
 
 # -------------------------
+# 🔥 REGLAS ANTI-FALLO
+# -------------------------
+bullying_keywords = [
+    "stupid", "idiot", "dumb", "useless", "loser",
+    "hate you", "nobody likes you", "disgusting",
+    "ugly", "trash", "kill yourself"
+]
+
+def rule_based_detection(text):
+    text = text.lower()
+    for word in bullying_keywords:
+        if word in text:
+            return 1
+    return 0
+
+# -------------------------
 # LOAD DATA
 # -------------------------
 @st.cache_data
@@ -58,7 +74,7 @@ def load_data():
 df = load_data()
 
 # -------------------------
-# 🔥 AÑADIR EJEMPLOS NO-BULLYING (CLAVE)
+# 🔥 AÑADIR EJEMPLOS NO-BULLYING
 # -------------------------
 extra_data = pd.DataFrame({
     "tweet_text": [
@@ -71,20 +87,15 @@ extra_data = pd.DataFrame({
         "I appreciate your help",
         "Everything will be okay",
         "You did a fantastic job",
-        "I am proud of you",
-        "We should collaborate on this project",
-        "I like your idea",
-        "This looks really good",
-        "Happy birthday! Have a great day",
-        "Thank you for your support"
+        "I am proud of you"
     ],
-    "cyberbullying_type": ["not_cyberbullying"] * 15
+    "cyberbullying_type": ["not_cyberbullying"] * 10
 })
 
 df = pd.concat([df, extra_data], ignore_index=True)
 
 # -------------------------
-# 🔥 ETIQUETA BINARIA MEJORADA
+# ETIQUETA BINARIA
 # -------------------------
 df["is_bullying"] = df["cyberbullying_type"].apply(
     lambda x: 0 if "not" in str(x).lower() else 1
@@ -99,8 +110,6 @@ def train_models(df):
     df["clean_text"] = df["tweet_text"].apply(clean_text)
 
     X = df["clean_text"]
-
-    # 🔥 Modelo 1: bullying vs no bullying
     y_binary = df["is_bullying"]
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -108,7 +117,6 @@ def train_models(df):
     )
 
     vectorizer = TfidfVectorizer(max_features=5000)
-
     X_train_vec = vectorizer.fit_transform(X_train)
 
     model_binary = LogisticRegression(max_iter=1000, class_weight="balanced")
@@ -118,7 +126,7 @@ def train_models(df):
         vectorizer.transform(X_test), y_test
     )
 
-    # 🔥 Modelo 2: tipo de bullying
+    # Modelo tipo
     df_bully = df[df["is_bullying"] == 1]
 
     X2 = df_bully["clean_text"]
@@ -153,7 +161,11 @@ if st.button("Analizar"):
         cleaned = clean_text(user_input)
         vector = vectorizer.transform([cleaned])
 
-        pred_binary = model_binary.predict(vector)[0]
+        # 🔥 combinación modelo + reglas
+        rule_pred = rule_based_detection(user_input)
+        model_pred = model_binary.predict(vector)[0]
+
+        pred_binary = 1 if (rule_pred == 1 or model_pred == 1) else 0
 
         if pred_binary == 0:
             st.success("✅ No es cyberbullying")
